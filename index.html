@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Canadian Energy Flow Sankey Diagram 2018 </title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="d3-sankey.min.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+  <style>
+    .link {
+      fill: none;
+      stroke-opacity: 0.5;
+    }
+
+    .node rect {
+      stroke: #000;
+    }
+
+    .tooltip {
+      position: absolute;
+      background-color: #fff;
+      padding: 5px;
+      font-size: 12px;
+      border: 1px solid #ccc;
+      opacity: 0;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: 'Noto Sans', sans-serif;
+      font-size: 12px;
+    }
+
+    .label {
+      font-family: 'Noto Sans', sans-serif;
+      font-size: 18px;
+      font-weight:bold;
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body onload="init()">
+  <div class="container">
+  <div class="label">Canadian Energy Flow, 2018 (Petajoules)</div>
+  <div id="sankey" style="font-family: 'Noto Sans', sans-serif;font-size:12px;"></div>
+  <div class="tooltip"></div>
+
+  <script>
+    // Labels
+    const labels = [
+    { key: "Coal prod", label: "Coal" },
+    { key: "Natural Gas prod", label: "Natural Gas" },
+    { key: "Crude Oil prod", label: "Crude Oil" },
+    { key: "NGL's prod", label: "NGL's" },
+    { key: "Primary Electricity prod", label: "Primary Electricity" },
+    { key: "Secondary Electricity prod", label: "Secondary Electricity" },
+    { key: "Steam prod", label: "Steam" },
+    { key: "Crude Oil and Refined Products", label: "Crude Oil and Refined Products" },
+    { key: "Other Imports", label: "Other Imports" },
+    { key: "Coke, coke oven gas and Adjustments", label: "Coke, coke oven gas and Adjustments" },
+    { key: "Fossil Fuels", label: "Fossil Fuels" },
+    { key: "Domestic Production", label: "Domestic Production" },
+    { key: "Imported Energy", label: "Imported Energy" },
+    { key: "Exported Energy", label: "Exported Energy" },
+    { key: "Total Supply", label: "Total Supply" },
+    { key: "Coal, coke, Coke Oven Gas", label: "Coal, coke, Coke Oven Gas" },
+    { key: "Petroleum Products", label: "Petroleum Products" },
+    { key: "Total Consumption", label: "Total Consumption" },
+    { key: "Total Electricity", label: "Total Electricity" },
+    { key: "Total Comsumption", label: "Total Consumption" },
+    { key: "Residential and Agriculture", label: "Residential and Agriculture" },
+    { key: "Commercial and Public Admin", label: "Commercial and Public Admin" },
+    { key: "Industrial Use", label: "Industrial Use" },
+    { key: "Transportation Use", label: "Transportation Use" },
+    { key: "Transformation and Adjustments", label: "Transformation and Adjustments" },
+    { key: "Non-energy Use", label: "Non-energy Use" },
+    { key: "Producer Consumption", label: "Producer Consumption" },
+    { key: "Crude Oil export", label: "Crude Oil" },
+    { key: "Natural Gas export", label: "Natural Gas" },
+    { key: "Other export", label: "Other" },
+    { key: "Fossil Fuel", label: "Fossil Fuels" },
+  ];
+
+    // Data
+    async function fetchData() {
+      try {
+        const response = await axios.get('RESD_2018.json');
+        const data = response.data;
+
+      // Data transformation
+      const nodes = Array.from(new Set(data.flatMap(d => [d.source, d.target]))).map((name, index) => ({ name, index }));
+
+      const links = data.map(d => {
+        const source = nodes.findIndex(node => node.name === d.source);
+        const target = nodes.findIndex(node => node.name === d.target);
+        return {
+          source,
+          target,
+          value: d.value,
+        };
+      });
+
+      return { nodes, links };
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  }
+
+    async function init() {
+      const data = await fetchData();
+
+      var nodes = data.nodes.map(item => {
+        return { name: item.name };
+      });
+
+      for (let i = 0; i < nodes.length; i++) {
+        const element = nodes[i];
+        const labelItem = labels.find(item => item.key === element.name);
+        if (labelItem && labelItem.label) {
+          nodes[i].name = labelItem.label;
+        }
+      }
+
+      var links = data.links.filter(item => item.target);
+
+      links = links.map(item => {
+        return { source: item.source, target: item.target, value: item.value };
+      });
+
+      // Dimensions
+      var width = 1500;
+      var height = 800;
+
+      // Create SVG
+      var svg = d3.select("#sankey")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+      // Set up Sankey layout
+      var sankey = d3.sankey()
+        .nodeWidth(15)
+        .nodePadding(5)
+        .size([width, height]);
+
+      // Compute layout
+      var { nodes, links } = sankey({
+        nodes: nodes,
+        links: links
+      });
+
+      // Create link gradient colors
+      var linkGradient = svg.append("defs")
+        .selectAll("linearGradient")
+        .data(links)
+        .enter()
+        .append("linearGradient")
+        .attr("id", function (d, i) { return "gradient-" + i; })
+        .attr("gradientUnits", "userSpaceOnUse")
+        .attr("x1", function (d) { return d.source.x1; })
+        .attr("x2", function (d) { return d.target.x0; });
+
+        linkGradient.append("stop")
+          .attr("offset", "0%")
+          .attr("stop-color", "#eaeaea");
+
+        linkGradient.append("stop")
+          .attr("offset", "100%")
+          .attr("stop-color", "#eaeaea");
+
+      // Create link groups
+      var link = svg.append("g")
+        .selectAll(".link")
+        .data(links)
+        .enter()
+        .append("path")
+        .attr("class", "link")
+        .attr("d", d3.sankeyLinkHorizontal())
+        .style("fill", "none")
+        .style("stroke-opacity", 0.5)
+        .style("stroke-width", function (d) { return Math.max(1, d.width); })
+        .style("stroke", function (d, i) { return "url(#gradient-" + i + ")"; })
+        .on("mouseover", function (d, i) {
+          const el = document.getElementById(`gradient-${i.index}`)
+          el.childNodes[0].setAttribute("stop-color", d3.schemeCategory10[i.source.index % 10])
+          el.childNodes[1].setAttribute("stop-color", d3.schemeCategory10[i.target.index % 10])
+          d3.select(this)
+            .style("stroke-opacity", 0.5);
+          tooltip.html("<strong>" + i.source.name + "&nbsp;&#8594;&nbsp;" + i.target.name + "</strong><br>" +
+            i.value.toLocaleString("en-US") + " PJ")
+            .style("left", (d.pageX + 10) + "px")
+            .style("top", (d.pageY - 10) + "px")
+            .style("background-color", "#335075")
+            .style("color", "#fff")
+            .style("border", "2px solid black")
+            .style("border-radius", "5px")
+            .style("opacity", 1);
+        })
+          .on("mousemove", function (d) { // New event handl
+           tooltip.style("left", (d.pageX + 10) + "px")
+           .style("top", (d.pageY - 10) + "px");
+        })
+        .on("mouseout", function (d, i) {
+          const el = document.getElementById(`gradient-${i.index}`)
+          el.childNodes[0].setAttribute("stop-color", "#eaeaea")
+          el.childNodes[1].setAttribute("stop-color", "#eaeaea")
+          d3.select(this)
+            .style("stroke-opacity", 0.5);
+          tooltip.style("opacity", 0);
+        });
+
+      // Create node groups
+      var node = svg.append("g")
+        .selectAll(".node")
+        .data(nodes)
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .attr("transform", function (d) {
+          return "translate(" + d.x0 + "," + d.y0 + ")";
+        });
+
+      // Add rectangles to nodes
+      node.append("rect")
+        .attr("height", function (d) { return d.y1 - d.y0; })
+        .attr("width", sankey.nodeWidth())
+        .style("fill", function (d, i) {
+          return d3.schemeCategory10[i % 10];
+        })
+        .style("stroke", "#000");
+
+      // Add labels to nodes
+      node.append("text")
+        .attr("x", -6)
+        .attr("y", function (d) { return (d.y1 - d.y0) / 2; })
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "end")
+        .text(function (d) {
+          return d.name;
+        })
+        .filter(function (d) { return d.x0 < width / 2; })
+        .attr("x", 6 + sankey.nodeWidth())
+        .attr("text-anchor", "start");
+
+      node.on("mouseover", function (d, i) {
+        d3.select(this)
+          .style("stroke-opacity", 1);
+        tooltip.html("<strong>" + i.name + "</strong><br>" +
+          Math.round(i.value).toLocaleString("en-US") + " PJ")
+          .style("left", (d.pageX + 10) + "px")
+          .style("top", (d.pageY - 10) + "px")
+          .style("background-color", "#335075")
+          .style("color", "#fff")
+          .style("border", "2px solid black")
+          .style("border-radius", "5px")
+          .style("opacity", 1);
+      });
+
+      // Create tooltip
+      var tooltip = d3.select(".tooltip");
+
+      // Update tooltip position on mouse move
+      svg.on("mousemove", function (d) {
+        tooltip.style("left", (d.pageX + 10) + "px")
+          .style("top", (d.pageY - 10) + "px");
+      });
+
+      // Hide tooltip on mouseout
+      svg.on("mouseout", function () {
+        tooltip.style("opacity", 0);
+      });
+    }
+  </script>
+</body>
+
+</html>
